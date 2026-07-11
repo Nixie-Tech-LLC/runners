@@ -1,0 +1,5 @@
+# Built by the Flux Kustomization `runners` (Mimir: gitops/flux/apps/runners.yaml), path ./deploy.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - arc.yaml

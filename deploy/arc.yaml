@@ -1,0 +1,94 @@
+# ARC (GitHub Actions Runner Controller) — org-wide self-hosted runners. Owns "Mimir-as-runner-compute":
+# any Nixie-Tech-LLC repo's workflow runs on these ephemeral runner pods. SPLIT OUT of Mimir into this
+# repo (external-app-repo pattern, like qadi/media-stack); Mimir references it via a Flux GitRepository +
+# Kustomization. Release names + namespaces are UNCHANGED from the Mimir definition so Flux adopts the
+# existing HelmReleases in place (no controller/runner teardown, no CI blackout during the cutover).
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: actions-runner-controller
+  namespace: flux-system
+spec:
+  type: oci
+  interval: 6h
+  url: oci://ghcr.io/actions/actions-runner-controller-charts
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: arc-controller
+  namespace: flux-system
+spec:
+  interval: 30m
+  releaseName: arc-controller
+  targetNamespace: arc-systems
+  install: { createNamespace: true, crds: CreateReplace }
+  upgrade: { crds: CreateReplace }
+  chart:
+    spec:
+      chart: gha-runner-scale-set-controller
+      version: "0.14.2"
+      sourceRef: { kind: HelmRepository, name: actions-runner-controller }
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: arc-ci-runners
+  namespace: flux-system
+spec:
+  interval: 30m
+  releaseName: ci
+  targetNamespace: arc-runners
+  install: { createNamespace: true }
+  dependsOn: [{ name: arc-controller }]
+  chart:
+    spec:
+      chart: gha-runner-scale-set
+      version: "0.14.2"
+      sourceRef: { kind: HelmRepository, name: actions-runner-controller }
+  values:
+    githubConfigUrl: https://github.com/Nixie-Tech-LLC
+    githubConfigSecret: arc-github-app
+    runnerScaleSetName: ci
+    # One warm runner eliminates the scale-from-zero cold start (pod create + runner/dind image pull +
+    # buildkit init) that dominated job latency. Ephemeral runners still recycle after each job; build
+    # SPEED comes from the workflow-side pip/buildx caches + the pre-baked custom runner image below.
+    # Node has ample headroom (16 CPU / 64Gi). Set back to 0 to fully idle-down.
+    minRunners: 1
+    maxRunners: 4
+    controllerServiceAccount: { name: arc-controller-gha-rs-controller, namespace: arc-systems }
+    containerMode: { type: dind }
+    # Custom runner image (this repo's runner-image/Dockerfile -> ghcr.io/nixie-tech-llc/runner). Kept
+    # COMMENTED until the image is built + the Flux ownership handoff is verified — switching the image
+    # before it exists would ImagePullBackOff every runner (CI blackout). See README § Switch to the
+    # custom image.
+    # template:
+    #   spec:
+    #     containers:
+    #       - name: runner
+    #         image: ghcr.io/nixie-tech-llc/runner:latest
+    #         command: ["/home/runner/run.sh"]
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: arc-review-runners
+  namespace: flux-system
+spec:
+  interval: 30m
+  releaseName: review
+  targetNamespace: arc-runners
+  install: { createNamespace: true }
+  dependsOn: [{ name: arc-controller }]
+  chart:
+    spec:
+      chart: gha-runner-scale-set
+      version: "0.14.2"
+      sourceRef: { kind: HelmRepository, name: actions-runner-controller }
+  values:
+    githubConfigUrl: https://github.com/Nixie-Tech-LLC
+    githubConfigSecret: arc-github-app
+    runnerScaleSetName: review
+    minRunners: 1   # warm validation runner (lightweight, no dind) — instant iac-validate / lint jobs
+    maxRunners: 3
+    controllerServiceAccount: { name: arc-controller-gha-rs-controller, namespace: arc-systems }
