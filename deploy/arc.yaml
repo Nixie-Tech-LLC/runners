@@ -58,16 +58,16 @@ spec:
     maxRunners: 4
     controllerServiceAccount: { name: arc-controller-gha-rs-controller, namespace: arc-systems }
     containerMode: { type: dind }
-    # Pin runners to the DEDICATED TENANT NODE (Mimir tofu/substrate tenantnode1, 16 vCPU/32Gi, tainted
-    # dedicated=tenant:NoSchedule). Gets arbitrary PR/dependency code off idp-node1 — away from media-stack,
-    # OpenBao, and the control-plane kernel. The nodeSelector targets the node's mimir.io/pool=tenant label;
-    # the toleration lets it land on the taint that keeps everything else off.
+    # ISOLATION = Kata, not a separate node. Each runner pod runs as its own Kata microVM
+    # (runtimeClassName: kata) on the SINGLE node — VM-grade kernel isolation for arbitrary PR/dependency +
+    # dind code, away from media-stack/OpenBao/control-plane, WITHOUT partitioning the box into a second
+    # VM-node (that was HA theater on one physical host — see plans/runner-node.md). dind runs privileged,
+    # which is SAFE because it's contained inside the microVM; the kata containerd handler sets
+    # privileged_without_host_devices (Mimir bootstrap/01b-kata.sh) so privileged dind starts cleanly under
+    # Kata. Single node also means runners burst into the whole-box scheduling pool, not a fixed 16-vCPU slice.
     template:
       spec:
-        nodeSelector:
-          mimir.io/pool: tenant
-        tolerations:
-          - { key: dedicated, operator: Equal, value: tenant, effect: NoSchedule }
+        runtimeClassName: kata
     # Custom runner image (this repo's runner-image/Dockerfile -> ghcr.io/nixie-tech-llc/runner). Kept
     # COMMENTED until the image is built + verified — switching before it exists ImagePullBackOffs every
     # runner. When enabled it goes under template.spec.containers (merges with the nodeSelector/tolerations above):
@@ -97,10 +97,7 @@ spec:
     minRunners: 1   # warm validation runner (lightweight, no dind) — instant iac-validate / lint jobs
     maxRunners: 3
     controllerServiceAccount: { name: arc-controller-gha-rs-controller, namespace: arc-systems }
-    # Pin to the dedicated tenant node (see the ci scale set above for rationale).
+    # Kata microVM isolation on the single node (see the ci scale set above for rationale).
     template:
       spec:
-        nodeSelector:
-          mimir.io/pool: tenant
-        tolerations:
-          - { key: dedicated, operator: Equal, value: tenant, effect: NoSchedule }
+        runtimeClassName: kata
