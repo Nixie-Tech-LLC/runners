@@ -58,21 +58,18 @@ spec:
     maxRunners: 4
     controllerServiceAccount: { name: arc-controller-gha-rs-controller, namespace: arc-systems }
     containerMode: { type: dind }
-    # ISOLATION = Kata, not a separate node. Each runner pod runs as its own Kata microVM
-    # (runtimeClassName: kata) on the SINGLE node — VM-grade kernel isolation for arbitrary PR/dependency +
-    # dind code, away from media-stack/OpenBao/control-plane, WITHOUT partitioning the box into a second
-    # VM-node (that was HA theater on one physical host — see plans/runner-node.md). dind runs privileged,
-    # which is SAFE because it's contained inside the microVM; the kata containerd handler sets
-    # privileged_without_host_devices (Mimir bootstrap/01b-kata.sh) so privileged dind starts cleanly under
-    # Kata. Single node also means runners burst into the whole-box scheduling pool, not a fixed 16-vCPU slice.
-    template:
-      spec:
-        runtimeClassName: kata
+    # Plain pods on the single node (NOT Kata): Kata microVM isolation breaks docker-in-docker CI — image
+    # BUILDS and service containers need nested overlay mounts that fail inside the guest, and the workarounds
+    # (fuse-overlayfs vs privileged_without_host_devices) conflict. CI is first-party org code; isolation here
+    # is the quota + priority (Mimir tofu/isolation). Kata is reserved for UNTRUSTED tenants (guarded projects),
+    # where it works (no dind). See plans/runner-node.md.
     # Custom runner image (this repo's runner-image/Dockerfile -> ghcr.io/nixie-tech-llc/runner). Kept
     # COMMENTED until the image is built + verified — switching before it exists ImagePullBackOffs every
-    # runner. When enabled it goes under template.spec.containers (merges with the nodeSelector/tolerations above):
-    #     containers:
-    #       - { name: runner, image: ghcr.io/nixie-tech-llc/runner:latest, command: ["/home/runner/run.sh"] }
+    # runner. When enabled:
+    #   template:
+    #     spec:
+    #       containers:
+    #         - { name: runner, image: ghcr.io/nixie-tech-llc/runner:latest, command: ["/home/runner/run.sh"] }
 ---
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
@@ -97,7 +94,4 @@ spec:
     minRunners: 1   # warm validation runner (lightweight, no dind) — instant iac-validate / lint jobs
     maxRunners: 3
     controllerServiceAccount: { name: arc-controller-gha-rs-controller, namespace: arc-systems }
-    # Kata microVM isolation on the single node (see the ci scale set above for rationale).
-    template:
-      spec:
-        runtimeClassName: kata
+    # Plain pods (not Kata) — same rationale as the ci scale set: dind-in-Kata is unviable for CI builds.
