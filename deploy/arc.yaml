@@ -53,21 +53,26 @@ spec:
     # One warm runner eliminates the scale-from-zero cold start (pod create + runner/dind image pull +
     # buildkit init) that dominated job latency. Ephemeral runners still recycle after each job; build
     # SPEED comes from the workflow-side pip/buildx caches + the pre-baked custom runner image below.
-    # Node has ample headroom (16 CPU / 64Gi). Set back to 0 to fully idle-down.
+    # Set back to 0 to fully idle-down.
     minRunners: 1
     maxRunners: 4
     controllerServiceAccount: { name: arc-controller-gha-rs-controller, namespace: arc-systems }
     containerMode: { type: dind }
+    # Pin runners to the DEDICATED TENANT NODE (Mimir tofu/substrate tenantnode1, 16 vCPU/32Gi, tainted
+    # dedicated=tenant:NoSchedule). Gets arbitrary PR/dependency code off idp-node1 — away from media-stack,
+    # OpenBao, and the control-plane kernel. The nodeSelector targets the node's mimir.io/pool=tenant label;
+    # the toleration lets it land on the taint that keeps everything else off.
+    template:
+      spec:
+        nodeSelector:
+          mimir.io/pool: tenant
+        tolerations:
+          - { key: dedicated, operator: Equal, value: tenant, effect: NoSchedule }
     # Custom runner image (this repo's runner-image/Dockerfile -> ghcr.io/nixie-tech-llc/runner). Kept
-    # COMMENTED until the image is built + the Flux ownership handoff is verified — switching the image
-    # before it exists would ImagePullBackOff every runner (CI blackout). See README § Switch to the
-    # custom image.
-    # template:
-    #   spec:
+    # COMMENTED until the image is built + verified — switching before it exists ImagePullBackOffs every
+    # runner. When enabled it goes under template.spec.containers (merges with the nodeSelector/tolerations above):
     #     containers:
-    #       - name: runner
-    #         image: ghcr.io/nixie-tech-llc/runner:latest
-    #         command: ["/home/runner/run.sh"]
+    #       - { name: runner, image: ghcr.io/nixie-tech-llc/runner:latest, command: ["/home/runner/run.sh"] }
 ---
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
@@ -92,3 +97,10 @@ spec:
     minRunners: 1   # warm validation runner (lightweight, no dind) — instant iac-validate / lint jobs
     maxRunners: 3
     controllerServiceAccount: { name: arc-controller-gha-rs-controller, namespace: arc-systems }
+    # Pin to the dedicated tenant node (see the ci scale set above for rationale).
+    template:
+      spec:
+        nodeSelector:
+          mimir.io/pool: tenant
+        tolerations:
+          - { key: dedicated, operator: Equal, value: tenant, effect: NoSchedule }
