@@ -1,5 +1,5 @@
 # ARC (GitHub Actions Runner Controller) — org-wide self-hosted runners. Owns "Mimir-as-runner-compute":
-# any nixiesoftware (ex Nixie-Tech-LLC) repo's workflow runs on these ephemeral runner pods. SPLIT OUT of Mimir into this
+# any nixiesoftware (ex nixiesoftware) repo's workflow runs on these ephemeral runner pods. SPLIT OUT of Mimir into this
 # repo (external-app-repo pattern, like qadi/media-stack); Mimir references it via a Flux GitRepository +
 # Kustomization. Release names + namespaces are UNCHANGED from the Mimir definition so Flux adopts the
 # existing HelmReleases in place (no controller/runner teardown, no CI blackout during the cutover).
@@ -63,13 +63,13 @@ spec:
     # (fuse-overlayfs vs privileged_without_host_devices) conflict. CI is first-party org code; isolation here
     # is the quota + priority (Mimir tofu/isolation). Kata is reserved for UNTRUSTED tenants (guarded projects),
     # where it works (no dind). See plans/runner-node.md.
-    # Custom runner image (this repo's runner-image/Dockerfile -> ghcr.io/nixie-tech-llc/runner). Kept
+    # Custom runner image (this repo's runner-image/Dockerfile -> ghcr.io/nixiesoftware/runner). Kept
     # COMMENTED until the image is built + verified — switching before it exists ImagePullBackOffs every
     # runner. When enabled:
     #   template:
     #     spec:
     #       containers:
-    #         - { name: runner, image: ghcr.io/nixie-tech-llc/runner:latest, command: ["/home/runner/run.sh"] }
+    #         - { name: runner, image: ghcr.io/nixiesoftware/runner:latest, command: ["/home/runner/run.sh"] }
 ---
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
