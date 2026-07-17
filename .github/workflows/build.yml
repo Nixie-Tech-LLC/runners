@@ -15,7 +15,7 @@ permissions:
   packages: write
 
 env:
-  IMAGE: ghcr.io/nixie-tech-llc/runner
+  IMAGE: ghcr.io/nixiesoftware/runner
 
 jobs:
   build:

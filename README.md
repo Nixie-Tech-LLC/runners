@@ -1,6 +1,6 @@
 # runners
 
-Self-hosted GitHub Actions runners for **Nixie-Tech-LLC** — the org's own CI compute
+Self-hosted GitHub Actions runners for **nixiesoftware** — the org's own CI compute
 ("Mimir-as-runner-compute"). Split out of the Mimir platform repo into its own repo
 (external-app-repo pattern, like `qadi` and `media-stack`); **Mimir references this repo** via a
 Flux `GitRepository` + `Kustomization`.
@@ -11,7 +11,7 @@ Flux `GitRepository` + `Kustomization`.
   (dind, for image builds) and `review` (lightweight validation) scale sets. Release names and
   namespaces are unchanged from the old Mimir definition so Flux **adopts the running releases in
   place** — no teardown, no CI blackout.
-- **`runner-image/`** — a custom runner image (`ghcr.io/nixie-tech-llc/runner`): the upstream
+- **`runner-image/`** — a custom runner image (`ghcr.io/nixiesoftware/runner`): the upstream
   actions-runner plus docker CLI + buildx + git/jq/unzip, pre-baked to trim per-job setup.
 - **`.github/workflows/build.yml`** — builds + publishes that image (on `runs-on: ci`).
 
@@ -31,7 +31,7 @@ All CI depends on these runners, so the move **adopts** rather than recreates:
 
 *After* the cutover is verified and the image is built:
 
-1. Merge this repo → `build.yml` publishes `ghcr.io/nixie-tech-llc/runner:latest`.
+1. Merge this repo → `build.yml` publishes `ghcr.io/nixiesoftware/runner:latest`.
 2. Uncomment the `template.spec.containers[runner].image` block in `deploy/arc.yaml` (the `ci`
    scale set) — and add it to `review` if wanted.
 3. Flux rolls the scale sets onto the pre-baked image.
